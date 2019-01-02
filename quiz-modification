@@ -1,0 +1,81 @@
+add_action( 'learn_press_request_handler_lp-nav-question-quiz', 'my_func', 11 );
+
+function my_func( $data ){
+	global $wpdb;
+
+	$nav_type = LP_Request::get_string( 'nav-type' );
+
+				$course_id   = LP_Request::get_int( 'course-id' );
+				$quiz_id     = LP_Request::get_int( 'quiz-id' );
+				$q_id = LP_Request::get_int( 'question-id' );
+
+				if ( ! $questions = LP_Quiz_Factory::get_answers_posted() ) {
+					$questions = array();
+				}
+
+				$user   = learn_press_get_current_user();
+				$course = learn_press_get_course( $course_id );
+				$quiz   = learn_press_get_quiz( $quiz_id );
+
+				$course_data = $user->get_course_data( $course->get_id() );
+				$quiz_data   = $course_data->get_item_quiz( $quiz->get_id() );
+			//$item_id = learn_press_get_user_item_id( $user->get_id(), $item_id, $course_id = 0 /* added 3.0.0 */ )
+	
+	//learn_press_get_user_item_meta( '_question_answers', $user_item_id, $meta_key, $single = true);
+	
+
+		
+		//debug_print_backtrace();
+		//exit;
+		// foreach( $this->_answers as $q_id => $user_answer ){
+			$query = 'Select * from wp_learnpress_question_answers where question_id = '.$q_id;
+			$question_answers = $wpdb->get_results( $query, 'ARRAY_A' );
+			$toatl_amswers = count( $question_answers );
+			$correct_ans_priority = 0;
+			$_error_rating = '';
+			$priority_difference = 0;
+			$error_rating_data = '';
+			$error_rate_meta = array();
+			$error_rate_set = false;
+
+			foreach( $question_answers as $q_answer ){
+				$ans_priority = $q_answer['answer_order'];
+				$answer_data = maybe_unserialize( $q_answer['answer_data'] );
+				
+				$user_answer = $quiz_data->get_question_answer( $q_id );
+				
+				if( $answer_data['value'] == $user_answer ) {
+					$user_ans_priority = $ans_priority;
+				}
+				if( $answer_data['is_true'] == 'yes' ) {
+					$correct_ans_priority = $ans_priority;
+				}
+
+				$priority_difference = ( $user_ans_priority ) - $correct_ans_priority;
+				if( $user_ans_priority && $correct_ans_priority ) {
+					$_error_rating = $priority_difference * 5;
+					$error_rate_set = true;
+				}	
+			}
+			if( $error_rate_set ) {
+				
+				$error_rate_meta_array = learn_press_get_user_item_meta(  $quiz_data->get_user_item_id(), '_error_rating', true );
+
+				$error_rating_data[$q_id] = $_error_rating;
+
+				if( !empty( $error_rate_meta_array ) ){
+					$error_rate_meta = $error_rating_data + $error_rate_meta_array;
+				} else {
+					$error_rate_meta = $error_rating_data;
+				}
+				
+				// print_r( $error_rate_meta_array ); 
+				// print_r( $error_rate_meta ); 
+				// print_r( $error_rating_data );	exit;
+				ksort($error_rate_meta);			
+				learn_press_update_user_item_meta( $quiz_data->get_user_item_id(), '_error_rating',  $error_rate_meta );
+			}
+			//exit;
+		// }
+			return true;
+}
